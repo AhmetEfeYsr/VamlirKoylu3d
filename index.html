@@ -40,97 +40,7 @@
         import * as THREE from 'three';
 
         // ==========================================
-        // 1. ATEŞ PARÇACIK SİSTEMİ
-        // ==========================================
-        class FireParticles {
-            constructor() {
-                this.particles = [];
-                const particleCount = 300;
-
-                const geometry = new THREE.BufferGeometry();
-                const positions = new Float32Array(particleCount * 3);
-                const colors = new Float32Array(particleCount * 3);
-                const sizes = new Float32Array(particleCount);
-
-                for (let i = 0; i < particleCount; i++) {
-                    const i3 = i * 3;
-                    positions[i3] = (Math.random() - 0.5) * 0.1;
-                    positions[i3 + 1] = Math.random() * 0.2;
-                    positions[i3 + 2] = (Math.random() - 0.5) * 0.1;
-
-                    this.particles.push({
-                        velocity: Math.random() * 0.003 + 0.002,
-                        initialY: positions[i3 + 1],
-                        wobble: Math.random() * Math.PI * 2,
-                        wobbleSpeed: Math.random() * 0.8 + 0.2,
-                        size: Math.random() * 0.004 + 0.002,
-                        horizontalVelocity: {
-                            x: (Math.random() - 0.5) * 0.0001,
-                            z: (Math.random() - 0.5) * 0.0001
-                        }
-                    });
-
-                    const t = Math.random();
-                    colors[i3] = 1;
-                    colors[i3 + 1] = t * 0.2 + 0.1;
-                    colors[i3 + 2] = t * 0.02;
-                    sizes[i] = this.particles[i].size;
-                }
-
-                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-                const material = new THREE.PointsMaterial({
-                    size: 1,
-                    vertexColors: true,
-                    transparent: true,
-                    opacity: 0.32,
-                    blending: THREE.AdditiveBlending,
-                    sizeAttenuation: true,
-                    depthWrite: false
-                });
-
-                this.mesh = new THREE.Points(geometry, material);
-                this.mesh.position.y = 0.34;
-            }
-
-            update(timeScale = 1) {
-                const positions = this.mesh.geometry.attributes.position.array;
-                const sizes = this.mesh.geometry.attributes.size.array;
-                const time = Date.now() * 0.001 * timeScale;
-
-                for (let i = 0; i < this.particles.length; i++) {
-                    const i3 = i * 3;
-                    const particle = this.particles[i];
-
-                    positions[i3 + 1] += particle.velocity;
-
-                    const heightFactor = 1 - positions[i3 + 1] / 1.2;
-                    positions[i3] += particle.horizontalVelocity.x * heightFactor;
-                    positions[i3 + 2] += particle.horizontalVelocity.z * heightFactor;
-
-                    const wobble = Math.sin(time * particle.wobbleSpeed + particle.wobble) * 0.002;
-                    positions[i3] += wobble;
-                    positions[i3 + 2] += wobble;
-
-                    sizes[i] = particle.size * (1 - positions[i3 + 1] / 1.2);
-
-                    if (positions[i3 + 1] > 0.8 || sizes[i] < 0.001) {
-                        positions[i3] = (Math.random() - 0.5) * 0.1;
-                        positions[i3 + 1] = particle.initialY;
-                        positions[i3 + 2] = (Math.random() - 0.5) * 0.1;
-                        sizes[i] = particle.size;
-                    }
-                }
-
-                this.mesh.geometry.attributes.position.needsUpdate = true;
-                this.mesh.geometry.attributes.size.needsUpdate = true;
-            }
-        }
-
-        // ==========================================
-        // 2. TATLI KARAKTER SINIFI
+        // 1. TATLI KARAKTER SINIFI
         // ==========================================
         class Player {
             constructor(color, index, totalPlayers, houseRadius, fireRadius) {
@@ -253,7 +163,7 @@
         }
 
         // ==========================================
-        // 3. KODLA ÇİZİLEN KUSURSUZ EV (HOUSE BUILDER)
+        // 2. KODLA ÇİZİLEN KUSURSUZ EV (HOUSE BUILDER)
         // ==========================================
         class HouseBuilder {
             static build(roofColorHex, windowsArray) {
@@ -367,7 +277,7 @@
         }
 
         // ==========================================
-        // 4. OYUN YÖNETİCİSİ VE GÜNDÜZ/GECE DÖNGÜSÜ
+        // 3. OYUN YÖNETİCİSİ VE GÜNDÜZ/GECE DÖNGÜSÜ
         // ==========================================
         class Game {
             constructor() {
@@ -548,13 +458,10 @@
                 this.fireGlow.scale.set(2.8, 2.8, 1);
 
                 this.flameVisualGroup.add(this.fireGlow, this.emberBed, this.flameOuter, this.flameMid, this.flameCore);
-                this.fireParticles = new FireParticles();
-                this.flameVisualGroup.add(this.fireParticles.mesh);
                 this.fireGlow.renderOrder = 5;
                 this.flameOuter.renderOrder = 6;
                 this.flameMid.renderOrder = 7;
                 this.flameCore.renderOrder = 8;
-                this.fireParticles.mesh.renderOrder = 9;
                 this.fireGroup.add(this.flameVisualGroup);
                 
                 this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -678,36 +585,20 @@
                 this.hemiLight.intensity = THREE.MathUtils.lerp(this.hemiLight.intensity, this.isNight ? 0.18 : 0.45, delta * 2);
                 this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, this.isNight ? 0.05 : 1.5, delta * 2);
                 
-                const fireIntensity = this.isNight ? (2.1 + Math.sin(time * 7) * 0.35) : (1.15 + Math.sin(time * 6) * 0.18);
+                const fireIntensity = this.isNight ? 2.1 : 1.15;
                 this.fireLight.intensity = THREE.MathUtils.lerp(this.fireLight.intensity, fireIntensity, delta * 4);
-                this.fireParticles.update(this.isNight ? 1.08 : 1);
-                this.flameVisualGroup.position.y = Math.max(0, Math.sin(time * 9) * 0.032);
-                this.flameOuter.rotation.y += delta * 0.6;
-                this.flameMid.rotation.y -= delta * 0.9;
-                this.flameOuter.position.x = Math.sin(time * 2.1) * 0.05 + 0.03;
-                this.flameOuter.position.z = Math.cos(time * 1.9) * 0.04 - 0.02;
-                this.flameMid.position.x = Math.cos(time * 2.6) * 0.04 - 0.04;
-                this.flameMid.position.z = Math.sin(time * 2.3) * 0.03 + 0.03;
-                this.flameCore.position.x = Math.sin(time * 3.3) * 0.025 + 0.02;
-                this.flameCore.position.z = Math.cos(time * 3.1) * 0.025 + 0.01;
-                this.flameCore.scale.set(
-                    1 + Math.sin(time * 15.5) * 0.08,
-                    1 + Math.sin(time * 18) * 0.16,
-                    1 + Math.sin(time * 14.2) * 0.08
-                );
-                this.flameMid.scale.set(
-                    1 + Math.sin(time * 10.5) * 0.1,
-                    1 + Math.sin(time * 12.5) * 0.14,
-                    1 + Math.sin(time * 11) * 0.1
-                );
-                this.flameOuter.scale.set(
-                    1 + Math.sin(time * 8.2) * 0.12,
-                    1 + Math.sin(time * 9.6) * 0.18,
-                    1 + Math.sin(time * 8.8) * 0.12
-                );
+                this.flameVisualGroup.position.y = 0;
+                this.flameOuter.rotation.y = Math.PI / 10;
+                this.flameMid.rotation.y = -Math.PI / 8;
+                this.flameOuter.position.set(0.03, 0.84, -0.02);
+                this.flameMid.position.set(-0.04, 0.91, 0.03);
+                this.flameCore.position.set(0.02, 0.95, 0.01);
+                this.flameCore.scale.set(1, 1, 1);
+                this.flameMid.scale.set(1, 1, 1);
+                this.flameOuter.scale.set(1, 1, 1);
                 this.fireGlow.material.opacity = this.isNight ? 0.45 : 0.24;
-                this.fireGlow.scale.setScalar((this.isNight ? 3.1 : 2.5) + Math.sin(time * 7.4) * 0.22);
-                this.emberBed.material.emissiveIntensity = this.isNight ? 1.05 + Math.sin(time * 12) * 0.15 : 0.62 + Math.sin(time * 10) * 0.08;
+                this.fireGlow.scale.setScalar(this.isNight ? 3.1 : 2.5);
+                this.emberBed.material.emissiveIntensity = this.isNight ? 1.05 : 0.62;
                 this.flameCore.material.opacity = this.isNight ? 0.95 : 0.82;
                 this.flameMid.material.opacity = this.isNight ? 0.88 : 0.74;
                 this.flameOuter.material.opacity = this.isNight ? 0.68 : 0.5;
