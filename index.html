@@ -50,6 +50,10 @@
                 this.homePos = new THREE.Vector3(Math.cos(angle) * houseRadius, 1.0, Math.sin(angle) * houseRadius);
                 this.firePos = new THREE.Vector3(Math.cos(angle) * fireRadius, 1.0, Math.sin(angle) * fireRadius);
                 this.targetPos = this.firePos.clone();
+                this.velocity = new THREE.Vector3();
+                this.maxSpeed = 2.1;
+                this.maxForce = 7.5;
+                this.arriveRadius = 1.0;
 
                 this.meshGroup = new THREE.Group();
                 this.buildCharacter(color);
@@ -77,7 +81,11 @@
                 const rightEye = leftEye.clone();
                 rightEye.position.set(0.18, 0.1, 0.4);
                 
-                this.head.add(headMesh, leftEye, rightEye);
+                const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.025, 8, 20, Math.PI), blackMat);
+                mouth.position.set(0, -0.1, 0.42);
+                mouth.rotation.z = Math.PI;
+
+                this.head.add(headMesh, leftEye, rightEye, mouth);
                 this.body.add(this.head);
 
                 const createLimb = (radius, length) => {
@@ -102,34 +110,52 @@
                 this.meshGroup.add(this.leftLeg, this.rightLeg);
             }
 
-            update(delta, time) {
-                const dist = this.meshGroup.position.distanceTo(this.targetPos);
-                
-                if (dist > 0.1) {
-                    this.meshGroup.position.lerp(this.targetPos, delta * 3.5);
-                    const lookTarget = this.targetPos.clone();
-                    lookTarget.y = this.meshGroup.position.y;
-                    this.meshGroup.lookAt(lookTarget);
+            setTarget(position) {
+                this.targetPos.copy(position);
+            }
 
-                    const walkFreq = time * 15;
-                    const walkAmp = 0.6;
-                    
+            update(delta, time) {
+                const toTarget = this.targetPos.clone().sub(this.meshGroup.position);
+                const distance = toTarget.length();
+
+                if (distance > 0.06) {
+                    const desiredSpeed = distance < this.arriveRadius
+                        ? this.maxSpeed * (distance / this.arriveRadius)
+                        : this.maxSpeed;
+                    const desiredVelocity = toTarget.normalize().multiplyScalar(desiredSpeed);
+                    const steering = desiredVelocity.sub(this.velocity).clampLength(0, this.maxForce * delta);
+
+                    this.velocity.add(steering);
+                    this.velocity.clampLength(0, this.maxSpeed);
+                    this.meshGroup.position.addScaledVector(this.velocity, delta);
+
+                    if (this.velocity.lengthSq() > 0.0001) {
+                        const lookTarget = this.meshGroup.position.clone().add(this.velocity);
+                        lookTarget.y = this.meshGroup.position.y;
+                        this.meshGroup.lookAt(lookTarget);
+                    }
+
+                    const moveIntensity = THREE.MathUtils.clamp(this.velocity.length() / this.maxSpeed, 0.15, 1);
+                    const walkFreq = time * 7;
+                    const walkAmp = 0.35 * moveIntensity;
+
                     this.leftArm.rotation.x = Math.sin(walkFreq) * walkAmp;
                     this.rightArm.rotation.x = -Math.sin(walkFreq) * walkAmp;
                     this.leftLeg.rotation.x = -Math.sin(walkFreq) * walkAmp;
                     this.rightLeg.rotation.x = Math.sin(walkFreq) * walkAmp;
 
-                    this.body.position.y = Math.abs(Math.sin(walkFreq)) * 0.15;
-                    this.body.rotation.x = 0.1;
+                    this.body.position.y = Math.abs(Math.sin(walkFreq)) * 0.09 * moveIntensity;
+                    this.body.rotation.x = 0.06 * moveIntensity;
                 } else {
+                    this.velocity.multiplyScalar(Math.max(0, 1 - delta * 8));
                     this.meshGroup.lookAt(0, 1, 0);
 
-                    const breath = Math.sin(time * 2 + this.index);
-                    this.body.position.y = breath * 0.05;
+                    const breath = Math.sin(time * 1.5 + this.index);
+                    this.body.position.y = breath * 0.04;
                     this.body.rotation.x = 0;
-                    
-                    this.leftArm.rotation.x = Math.sin(time * 0.5 + this.index) * 0.05;
-                    this.rightArm.rotation.x = Math.sin(time * 0.5 + this.index) * 0.05;
+
+                    this.leftArm.rotation.x = Math.sin(time * 0.35 + this.index) * 0.04;
+                    this.rightArm.rotation.x = Math.sin(time * 0.35 + this.index) * 0.04;
                     this.leftLeg.rotation.x = 0;
                     this.rightLeg.rotation.x = 0;
                 }
@@ -279,15 +305,22 @@
 
                 this.clock = new THREE.Clock();
                 this.isNight = false;
-                
+                this.moveCenter = new THREE.Vector3(0, 1.0, 0);
+
                 this.players =[];
                 this.windows =[];
 
                 this.setupEnvironment();
                 this.setupPlayersAndHouses();
+                this.updatePlayerTargets("fire");
 
                 document.getElementById('btnDay').onclick = () => this.setNight(false);
                 document.getElementById('btnNight').onclick = () => this.setNight(true);
+
+                this.raycaster = new THREE.Raycaster();
+                this.pointer = new THREE.Vector2();
+                this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown.bind(this));
 
                 this.animate = this.animate.bind(this);
                 requestAnimationFrame(this.animate);
@@ -348,14 +381,30 @@
 
                 this.fireGroup = new THREE.Group();
                 const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2314 });
-                for(let i=0; i<3; i++) {
-                    const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.5, 6), woodMat);
-                    wood.rotation.z = Math.PI / 4;
+                for(let i=0; i<6; i++) {
+                    const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 1.8, 8), woodMat);
+                    wood.rotation.z = Math.PI / 3;
                     wood.rotation.y = (Math.PI / 3) * i;
-                    wood.position.y = 0.2;
+                    wood.position.y = 0.25;
                     wood.castShadow = true;
                     this.fireGroup.add(wood);
                 }
+
+                this.flameCore = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.38, 1.2, 14),
+                    new THREE.MeshStandardMaterial({ color: 0xffa11c, emissive: 0xff6a00, emissiveIntensity: 1.1, transparent: true, opacity: 0.95 })
+                );
+                this.flameCore.position.y = 0.9;
+                this.flameCore.castShadow = true;
+
+                this.flameOuter = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.62, 1.6, 14),
+                    new THREE.MeshStandardMaterial({ color: 0xffd36a, emissive: 0xff8a24, emissiveIntensity: 0.9, transparent: true, opacity: 0.65 })
+                );
+                this.flameOuter.position.y = 0.85;
+                this.flameOuter.castShadow = true;
+                this.flameOuter.rotation.y = Math.PI / 10;
+                this.fireGroup.add(this.flameOuter, this.flameCore);
                 
                 this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
                 this.scene.add(this.ambientLight);
@@ -423,8 +472,44 @@
 
             setNight(state) {
                 this.isNight = state;
-                this.players.forEach(p => {
-                    p.targetPos.copy(state ? p.homePos : p.firePos);
+                this.moveCenter.set(0, 1.0, 0);
+                this.updatePlayerTargets(state ? "home" : "fire");
+            }
+
+            handlePointerDown(event) {
+                if (this.isNight) return;
+
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+
+                const hit = new THREE.Vector3();
+                if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
+                    this.moveCenter.set(
+                        THREE.MathUtils.clamp(hit.x, -9, 9),
+                        1.0,
+                        THREE.MathUtils.clamp(hit.z, -9, 9)
+                    );
+                    this.updatePlayerTargets("custom");
+                }
+            }
+
+            updatePlayerTargets(mode = "fire") {
+                this.players.forEach((player, index, arr) => {
+                    if (mode === "home") {
+                        player.setTarget(player.homePos);
+                        return;
+                    }
+
+                    const angle = (index / arr.length) * Math.PI * 2;
+                    const radius = mode === "custom" ? 2.6 : 4.5;
+                    const formationTarget = new THREE.Vector3(
+                        this.moveCenter.x + Math.cos(angle) * radius,
+                        1.0,
+                        this.moveCenter.z + Math.sin(angle) * radius
+                    );
+                    player.setTarget(formationTarget);
                 });
             }
 
@@ -442,10 +527,14 @@
                 this.hemiLight.intensity = THREE.MathUtils.lerp(this.hemiLight.intensity, this.isNight ? 0.18 : 0.45, delta * 2);
                 this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, this.isNight ? 0.05 : 1.5, delta * 2);
                 
-                const fireIntensity = this.isNight ? (1.5 + Math.sin(time * 15) * 0.3) : 0;
-                this.fireLight.intensity = THREE.MathUtils.lerp(this.fireLight.intensity, fireIntensity, delta * 5);
-                this.fireGroup.scale.y = 1 + Math.sin(time * 18) * 0.05;
-                this.fireGroup.position.y = Math.max(0, Math.sin(time * 18) * 0.04);
+                const fireIntensity = this.isNight ? (2.1 + Math.sin(time * 7) * 0.35) : (1.15 + Math.sin(time * 6) * 0.18);
+                this.fireLight.intensity = THREE.MathUtils.lerp(this.fireLight.intensity, fireIntensity, delta * 4);
+                this.fireGroup.scale.y = 1 + Math.sin(time * 9) * 0.06;
+                this.fireGroup.position.y = Math.max(0, Math.sin(time * 9) * 0.03);
+                this.flameCore.scale.setScalar(1 + Math.sin(time * 14) * 0.08);
+                this.flameOuter.scale.set(1 + Math.sin(time * 10) * 0.1, 1 + Math.sin(time * 13) * 0.12, 1 + Math.sin(time * 11) * 0.1);
+                this.flameCore.material.opacity = this.isNight ? 0.98 : 0.86;
+                this.flameOuter.material.opacity = this.isNight ? 0.72 : 0.52;
                 this.starsMat.opacity = THREE.MathUtils.lerp(this.starsMat.opacity, this.isNight ? 0.95 : 0, delta * 1.8);
                 this.moon.material.emissiveIntensity = THREE.MathUtils.lerp(this.moon.material.emissiveIntensity, this.isNight ? 0.95 : 0.22, delta * 1.5);
                 this.renderer.toneMappingExposure = THREE.MathUtils.lerp(this.renderer.toneMappingExposure, this.isNight ? 0.72 : 1.02, delta * 1.2);
