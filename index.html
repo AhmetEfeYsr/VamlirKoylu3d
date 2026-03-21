@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Vampir Köylü - Kusursuz Evler</title>
     <style>
-        body { margin: 0; background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        #game-container { box-shadow: 0 10px 50px rgba(0,0,0,0.9); border-radius: 12px; overflow: hidden; width: 100%; max-width: 1000px; height: 100vh; max-height: 650px; position: relative; }
+        body { margin: 0; background: radial-gradient(circle at top, #24334d, #0f172a 60%, #06070c 100%); display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        #game-container { box-shadow: 0 14px 60px rgba(0,0,0,0.92); border-radius: 14px; overflow: hidden; width: 100%; max-width: 1000px; height: 100vh; max-height: 650px; position: relative; border: 1px solid rgba(255,255,255,0.08); }
         .ui-panel { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 12px; z-index: 10; flex-wrap: wrap; }
         button { background-color: #2E8B57; color: white; border: 2px solid rgba(255,255,255,0.2); padding: 12px 24px; font-size: 15px; font-weight: bold; border-radius: 10px; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.4); }
         button:hover { transform: translateY(-2px); border-color: white; }
         button:active { transform: translateY(1px); }
         .info { position: absolute; top: 15px; text-align: center; width: 100%; pointer-events: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.9); z-index: 10; }
+        .info p { letter-spacing: 0.4px; }
     </style>
 
     <script type="importmap">
@@ -27,7 +28,7 @@
     <div id="game-container">
         <div class="info">
             <h2 style="margin:0;">Vampir Köylü: Kusursuz Mimari</h2>
-            <p style="margin:5px 0 0 0; color:#ddd; font-weight: 500;">Z-Fighting Çözüldü, Camlar Mavi Yapıldı</p>
+            <p style="margin:5px 0 0 0; color:#ddd; font-weight: 500;">Atmosfer güçlendirildi: yıldızlar, ay ışığı, zemin detayları ve canlı kamp ateşi</p>
         </div>
         <div class="ui-panel">
             <button id="btnDay" style="background-color: #F59E0B;">☀️ Sabah Ol (Ateşe Toplan)</button>
@@ -265,6 +266,9 @@
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 1.0;
                 document.getElementById('game-container').appendChild(this.renderer.domElement);
 
                 window.addEventListener('resize', () => {
@@ -298,6 +302,50 @@
                 ground.receiveShadow = true;
                 this.scene.add(ground);
 
+                const innerGround = new THREE.Mesh(
+                    new THREE.CircleGeometry(8, 48),
+                    new THREE.MeshStandardMaterial({ color: 0x2f5a2f, roughness: 0.95 })
+                );
+                innerGround.rotation.x = -Math.PI / 2;
+                innerGround.position.y = 0.01;
+                innerGround.receiveShadow = true;
+                this.scene.add(innerGround);
+
+                const pathRing = new THREE.Mesh(
+                    new THREE.RingGeometry(8.5, 12.2, 72),
+                    new THREE.MeshStandardMaterial({ color: 0x8b6b47, roughness: 0.98 })
+                );
+                pathRing.rotation.x = -Math.PI / 2;
+                pathRing.position.y = 0.02;
+                pathRing.receiveShadow = true;
+                this.scene.add(pathRing);
+
+                this.starsMat = new THREE.PointsMaterial({
+                    color: 0xdde8ff,
+                    size: 0.16,
+                    transparent: true,
+                    opacity: 0,
+                    depthWrite: false
+                });
+                const starsGeo = new THREE.BufferGeometry();
+                const stars = [];
+                for (let i = 0; i < 500; i++) {
+                    const radius = 24 + Math.random() * 24;
+                    const theta = Math.random() * Math.PI * 2;
+                    const y = 8 + Math.random() * 22;
+                    stars.push(Math.cos(theta) * radius, y, Math.sin(theta) * radius);
+                }
+                starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(stars, 3));
+                this.stars = new THREE.Points(starsGeo, this.starsMat);
+                this.scene.add(this.stars);
+
+                this.moon = new THREE.Mesh(
+                    new THREE.SphereGeometry(1.3, 24, 24),
+                    new THREE.MeshStandardMaterial({ color: 0xe5efff, emissive: 0x5a6a88, emissiveIntensity: 0.45, roughness: 0.4 })
+                );
+                this.moon.position.set(-24, 20, -18);
+                this.scene.add(this.moon);
+
                 this.fireGroup = new THREE.Group();
                 const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2314 });
                 for(let i=0; i<3; i++) {
@@ -312,6 +360,9 @@
                 this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
                 this.scene.add(this.ambientLight);
 
+                this.hemiLight = new THREE.HemisphereLight(0x9fd0ff, 0x1b2718, 0.45);
+                this.scene.add(this.hemiLight);
+
                 this.dirLight = new THREE.DirectionalLight(0xfff5b6, 1.5); 
                 this.dirLight.position.set(15, 25, 15);
                 this.dirLight.castShadow = true;
@@ -324,6 +375,33 @@
                 this.fireLight.castShadow = true;
                 this.scene.add(this.fireLight);
                 this.scene.add(this.fireGroup);
+
+                const stoneMat = new THREE.MeshStandardMaterial({ color: 0x7c7c7c, roughness: 0.9 });
+                for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * Math.PI * 2;
+                    const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28 + Math.random() * 0.12), stoneMat);
+                    stone.position.set(Math.cos(a) * 1.45, 0.12, Math.sin(a) * 1.45);
+                    stone.scale.y = 0.65;
+                    stone.castShadow = true;
+                    stone.receiveShadow = true;
+                    this.scene.add(stone);
+                }
+
+                const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1b, roughness: 0.9 });
+                const treeLeafMat = new THREE.MeshStandardMaterial({ color: 0x1f5d2f, roughness: 0.85 });
+                for (let i = 0; i < 18; i++) {
+                    const angle = (i / 18) * Math.PI * 2;
+                    const radius = 20 + (i % 3) * 4;
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 2.2, 8), treeTrunkMat);
+                    trunk.position.set(x, 1.1, z);
+                    trunk.castShadow = true;
+                    const crown = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.4, 10), treeLeafMat);
+                    crown.position.set(x, 2.8, z);
+                    crown.castShadow = true;
+                    this.scene.add(trunk, crown);
+                }
             }
 
             setupPlayersAndHouses() {
@@ -361,10 +439,16 @@
                 this.scene.fog.color.lerp(targetBg, delta * 2);
                 
                 this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, this.isNight ? 0.2 : 0.6, delta * 2);
+                this.hemiLight.intensity = THREE.MathUtils.lerp(this.hemiLight.intensity, this.isNight ? 0.18 : 0.45, delta * 2);
                 this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, this.isNight ? 0.05 : 1.5, delta * 2);
                 
                 const fireIntensity = this.isNight ? (1.5 + Math.sin(time * 15) * 0.3) : 0;
                 this.fireLight.intensity = THREE.MathUtils.lerp(this.fireLight.intensity, fireIntensity, delta * 5);
+                this.fireGroup.scale.y = 1 + Math.sin(time * 18) * 0.05;
+                this.fireGroup.position.y = Math.max(0, Math.sin(time * 18) * 0.04);
+                this.starsMat.opacity = THREE.MathUtils.lerp(this.starsMat.opacity, this.isNight ? 0.95 : 0, delta * 1.8);
+                this.moon.material.emissiveIntensity = THREE.MathUtils.lerp(this.moon.material.emissiveIntensity, this.isNight ? 0.95 : 0.22, delta * 1.5);
+                this.renderer.toneMappingExposure = THREE.MathUtils.lerp(this.renderer.toneMappingExposure, this.isNight ? 0.72 : 1.02, delta * 1.2);
 
                 // DÜZELTME: Cam renkleri gündüz masmavi, gece sarı-ışıklı olacak şekilde güncellendi.
                 const winColorDay = new THREE.Color(0x4488ff); 
