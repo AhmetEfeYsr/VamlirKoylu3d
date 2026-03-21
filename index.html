@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Vampir Köylü - Kusursuz Evler</title>
+    <style>
+        body { margin: 0; background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        #game-container { box-shadow: 0 10px 50px rgba(0,0,0,0.9); border-radius: 12px; overflow: hidden; width: 100%; max-width: 1000px; height: 100vh; max-height: 650px; position: relative; }
+        .ui-panel { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 12px; z-index: 10; flex-wrap: wrap; }
+        button { background-color: #2E8B57; color: white; border: 2px solid rgba(255,255,255,0.2); padding: 12px 24px; font-size: 15px; font-weight: bold; border-radius: 10px; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.4); }
+        button:hover { transform: translateY(-2px); border-color: white; }
+        button:active { transform: translateY(1px); }
+        .info { position: absolute; top: 15px; text-align: center; width: 100%; pointer-events: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.9); z-index: 10; }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.162.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="info">
+            <h2 style="margin:0;">Vampir Köylü: Kusursuz Mimari</h2>
+            <p style="margin:5px 0 0 0; color:#ddd; font-weight: 500;">Z-Fighting Çözüldü, Camlar Mavi Yapıldı</p>
+        </div>
+        <div class="ui-panel">
+            <button id="btnDay" style="background-color: #F59E0B;">☀️ Sabah Ol (Ateşe Toplan)</button>
+            <button id="btnNight" style="background-color: #1E3A8A;">🌙 Gece Ol (Evlere Dön)</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ==========================================
+        // 1. TATLI KARAKTER SINIFI
+        // ==========================================
+        class Player {
+            constructor(color, index, totalPlayers, houseRadius, fireRadius) {
+                this.index = index;
+                const angle = (index / totalPlayers) * Math.PI * 2;
+                
+                this.homePos = new THREE.Vector3(Math.cos(angle) * houseRadius, 1.0, Math.sin(angle) * houseRadius);
+                this.firePos = new THREE.Vector3(Math.cos(angle) * fireRadius, 1.0, Math.sin(angle) * fireRadius);
+                this.targetPos = this.firePos.clone();
+
+                this.meshGroup = new THREE.Group();
+                this.buildCharacter(color);
+                
+                this.meshGroup.position.copy(this.firePos);
+                this.meshGroup.lookAt(0, 1, 0);
+            }
+
+            buildCharacter(colorHex) {
+                const mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.8 });
+                const blackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+
+                this.body = new THREE.Group();
+                const bodyMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.4, 4, 16), mat);
+                bodyMesh.castShadow = true;
+                this.body.add(bodyMesh);
+                this.meshGroup.add(this.body);
+
+                this.head = new THREE.Group();
+                this.head.position.y = 0.55;
+                const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), mat);
+                headMesh.castShadow = true;
+                const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), blackMat);
+                leftEye.position.set(-0.18, 0.1, 0.4);
+                const rightEye = leftEye.clone();
+                rightEye.position.set(0.18, 0.1, 0.4);
+                
+                this.head.add(headMesh, leftEye, rightEye);
+                this.body.add(this.head);
+
+                const createLimb = (radius, length) => {
+                    const pivot = new THREE.Group();
+                    const limbMesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 4, 8), mat);
+                    limbMesh.position.y = -(length / 2);
+                    limbMesh.castShadow = true;
+                    pivot.add(limbMesh);
+                    return pivot;
+                };
+
+                this.leftArm = createLimb(0.12, 0.4);
+                this.leftArm.position.set(-0.45, 0.2, 0);
+                this.rightArm = createLimb(0.12, 0.4);
+                this.rightArm.position.set(0.45, 0.2, 0);
+                this.body.add(this.leftArm, this.rightArm);
+
+                this.leftLeg = createLimb(0.14, 0.45);
+                this.leftLeg.position.set(-0.2, -0.3, 0);
+                this.rightLeg = createLimb(0.14, 0.45);
+                this.rightLeg.position.set(0.2, -0.3, 0);
+                this.meshGroup.add(this.leftLeg, this.rightLeg);
+            }
+
+            update(delta, time) {
+                const dist = this.meshGroup.position.distanceTo(this.targetPos);
+                
+                if (dist > 0.1) {
+                    this.meshGroup.position.lerp(this.targetPos, delta * 3.5);
+                    const lookTarget = this.targetPos.clone();
+                    lookTarget.y = this.meshGroup.position.y;
+                    this.meshGroup.lookAt(lookTarget);
+
+                    const walkFreq = time * 15;
+                    const walkAmp = 0.6;
+                    
+                    this.leftArm.rotation.x = Math.sin(walkFreq) * walkAmp;
+                    this.rightArm.rotation.x = -Math.sin(walkFreq) * walkAmp;
+                    this.leftLeg.rotation.x = -Math.sin(walkFreq) * walkAmp;
+                    this.rightLeg.rotation.x = Math.sin(walkFreq) * walkAmp;
+
+                    this.body.position.y = Math.abs(Math.sin(walkFreq)) * 0.15;
+                    this.body.rotation.x = 0.1;
+                } else {
+                    this.meshGroup.lookAt(0, 1, 0);
+
+                    const breath = Math.sin(time * 2 + this.index);
+                    this.body.position.y = breath * 0.05;
+                    this.body.rotation.x = 0;
+                    
+                    this.leftArm.rotation.x = Math.sin(time * 0.5 + this.index) * 0.05;
+                    this.rightArm.rotation.x = Math.sin(time * 0.5 + this.index) * 0.05;
+                    this.leftLeg.rotation.x = 0;
+                    this.rightLeg.rotation.x = 0;
+                }
+            }
+        }
+
+        // ==========================================
+        // 2. KODLA ÇİZİLEN KUSURSUZ EV (HOUSE BUILDER)
+        // ==========================================
+        class HouseBuilder {
+            static build(roofColorHex, windowsArray) {
+                const houseGroup = new THREE.Group();
+
+                const wallMat = new THREE.MeshStandardMaterial({ color: 0xffebd6, roughness: 0.9 }); 
+                const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.8 }); 
+                const roofMat = new THREE.MeshStandardMaterial({ color: roofColorHex, roughness: 0.7, flatShading: true }); 
+                
+                // --- 1. GÖVDE ---
+                const width = 3.6, depth = 3.6, radius = 0.6;
+                const shape = new THREE.Shape();
+                shape.moveTo(-width/2, -depth/2 + radius);
+                shape.lineTo(-width/2, depth/2 - radius);
+                shape.quadraticCurveTo(-width/2, depth/2, -width/2 + radius, depth/2);
+                shape.lineTo(width/2 - radius, depth/2);
+                shape.quadraticCurveTo(width/2, depth/2, width/2, depth/2 - radius);
+                shape.lineTo(width/2, -depth/2 + radius);
+                shape.quadraticCurveTo(width/2, -depth/2, width/2 - radius, -depth/2);
+                shape.lineTo(-width/2 + radius, -depth/2);
+                shape.quadraticCurveTo(-width/2, -depth/2, -width/2, -depth/2 + radius);
+
+                const extrudeSettings = { depth: 2.2, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.1, bevelThickness: 0.1 };
+                const wallGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                wallGeo.rotateX(-Math.PI / 2); 
+                
+                const walls = new THREE.Mesh(wallGeo, wallMat);
+                walls.castShadow = true;
+                walls.receiveShadow = true;
+                houseGroup.add(walls);
+
+                // --- 2. ÇATI VE BACA ---
+                const roofHeight = 2.0;
+                const roofGeo = new THREE.CylinderGeometry(0, 3.2, roofHeight, 4);
+                roofGeo.rotateY(Math.PI / 4);
+                const roof = new THREE.Mesh(roofGeo, roofMat);
+                roof.position.y = 2.3 + (roofHeight/2);
+                roof.castShadow = true;
+                
+                const trimGeo = new THREE.CylinderGeometry(0, 3.1, 0.2, 4);
+                trimGeo.rotateY(Math.PI / 4);
+                const trim = new THREE.Mesh(trimGeo, woodMat);
+                trim.position.y = - (roofHeight/2) + 0.1;
+                roof.add(trim);
+                houseGroup.add(roof);
+
+                const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
+                chimney.position.set(-1.2, 2.3 + roofHeight/2, -1.0);
+                chimney.castShadow = true;
+                houseGroup.add(chimney);
+
+                // --- 3. KEMERLİ KAPI (Z-FIGHTING ÇÖZÜLDÜ) ---
+                const doorGroup = new THREE.Group();
+                // DÜZELTME: Kapı kalınlığı 0.1'den 0.25'e çıkarıldı. Duvarla kesişmesi sağlandı.
+                const doorBase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.2, 0.25), woodMat);
+                doorBase.position.y = 0.6;
+                const doorTop = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.25, 16), woodMat);
+                doorTop.rotation.x = Math.PI / 2;
+                doorTop.position.y = 1.2;
+                doorGroup.add(doorBase, doorTop);
+                
+                const knob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 }));
+                // DÜZELTME: Tokmak kalınlaşan kapıya göre öne alındı
+                knob.position.set(0.3, 0.6, 0.15); 
+                doorGroup.add(knob);
+
+                // DÜZELTME: Kapı evin duvarının içine doğru hafif gömüldü
+                doorGroup.position.set(0, 0, depth/2 + 0.02); 
+                houseGroup.add(doorGroup);
+
+                const step = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.2, 4, 8), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+                step.rotation.z = Math.PI / 2;
+                step.position.set(0, 0.1, depth/2 + 0.3);
+                step.receiveShadow = true;
+                houseGroup.add(step);
+
+                // --- 4. MAVİ CAMLAR (Z-FIGHTING ÇÖZÜLDÜ) ---
+                // DÜZELTME: Gündüz belirgin, yansıtıcı cam mavisi rengi verildi.
+                const winMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x4488ff, // Cam Mavisi
+                    roughness: 0.2, 
+                    metalness: 0.8 
+                }); 
+                windowsArray.push(winMat);
+
+                const createWindow = (px, py, pz) => {
+                    const winGroup = new THREE.Group();
+                    
+                    // DÜZELTME: Camın kalınlığı (0.05 -> 0.2) artırıldı, duvarın içine geçiyor.
+                    const glassGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 16);
+                    glassGeo.rotateX(Math.PI / 2);
+                    const glass = new THREE.Mesh(glassGeo, winMat);
+                    winGroup.add(glass);
+
+                    const frameGeo = new THREE.TorusGeometry(0.4, 0.08, 8, 24);
+                    const frame = new THREE.Mesh(frameGeo, woodMat);
+                    frame.position.z = 0.05; // Çerçeveyi hafif öne al
+                    frame.castShadow = true;
+                    winGroup.add(frame);
+
+                    winGroup.position.set(px, py, pz);
+                    return winGroup;
+                };
+
+                // DÜZELTME: Pencereler de duvarın içine 0.02 birim gömüldü.
+                houseGroup.add(createWindow(-1.1, 1.3, depth/2 + 0.02)); 
+                houseGroup.add(createWindow(1.1, 1.3, depth/2 + 0.02));  
+
+                return houseGroup;
+            }
+        }
+
+        // ==========================================
+        // 3. OYUN YÖNETİCİSİ VE GÜNDÜZ/GECE DÖNGÜSÜ
+        // ==========================================
+        class Game {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x87CEEB, 0.02);
+                
+                this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+                this.camera.position.set(0, 20, 32); 
+                this.camera.lookAt(0, 0, 0);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('game-container').appendChild(this.renderer.domElement);
+
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                this.clock = new THREE.Clock();
+                this.isNight = false;
+                
+                this.players =[];
+                this.windows =[];
+
+                this.setupEnvironment();
+                this.setupPlayersAndHouses();
+
+                document.getElementById('btnDay').onclick = () => this.setNight(false);
+                document.getElementById('btnNight').onclick = () => this.setNight(true);
+
+                this.animate = this.animate.bind(this);
+                requestAnimationFrame(this.animate);
+            }
+
+            setupEnvironment() {
+                const ground = new THREE.Mesh(
+                    new THREE.PlaneGeometry(80, 80),
+                    new THREE.MeshStandardMaterial({ color: 0x1a4a2a, roughness: 1 })
+                );
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+
+                this.fireGroup = new THREE.Group();
+                const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2314 });
+                for(let i=0; i<3; i++) {
+                    const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.5, 6), woodMat);
+                    wood.rotation.z = Math.PI / 4;
+                    wood.rotation.y = (Math.PI / 3) * i;
+                    wood.position.y = 0.2;
+                    wood.castShadow = true;
+                    this.fireGroup.add(wood);
+                }
+                
+                this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(this.ambientLight);
+
+                this.dirLight = new THREE.DirectionalLight(0xfff5b6, 1.5); 
+                this.dirLight.position.set(15, 25, 15);
+                this.dirLight.castShadow = true;
+                this.dirLight.shadow.mapSize.width = 1024;
+                this.dirLight.shadow.mapSize.height = 1024;
+                this.scene.add(this.dirLight);
+
+                this.fireLight = new THREE.PointLight(0xff7700, 0, 20); 
+                this.fireLight.position.set(0, 1, 0);
+                this.fireLight.castShadow = true;
+                this.scene.add(this.fireLight);
+                this.scene.add(this.fireGroup);
+            }
+
+            setupPlayersAndHouses() {
+                const colors =[0xEF4444, 0x3B82F6, 0x10B981, 0xF59E0B, 0x8B5CF6, 0xEC4899];
+                const houseRadius = 13;
+                const fireRadius = 4.5;
+
+                colors.forEach((color, index) => {
+                    const player = new Player(color, index, colors.length, houseRadius, fireRadius);
+                    this.players.push(player);
+                    this.scene.add(player.meshGroup);
+                    
+                    const house = HouseBuilder.build(color, this.windows);
+                    house.position.copy(player.homePos);
+                    house.lookAt(0, 0, 0);
+                    this.scene.add(house);
+                });
+            }
+
+            setNight(state) {
+                this.isNight = state;
+                this.players.forEach(p => {
+                    p.targetPos.copy(state ? p.homePos : p.firePos);
+                });
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate);
+                const delta = this.clock.getDelta();
+                const time = this.clock.getElapsedTime();
+
+                const targetBg = this.isNight ? new THREE.Color(0x0a0a1a) : new THREE.Color(0x87CEEB);
+                this.scene.background = this.scene.background || new THREE.Color(0x87CEEB);
+                this.scene.background.lerp(targetBg, delta * 2);
+                this.scene.fog.color.lerp(targetBg, delta * 2);
+                
+                this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, this.isNight ? 0.2 : 0.6, delta * 2);
+                this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, this.isNight ? 0.05 : 1.5, delta * 2);
+                
+                const fireIntensity = this.isNight ? (1.5 + Math.sin(time * 15) * 0.3) : 0;
+                this.fireLight.intensity = THREE.MathUtils.lerp(this.fireLight.intensity, fireIntensity, delta * 5);
+
+                // DÜZELTME: Cam renkleri gündüz masmavi, gece sarı-ışıklı olacak şekilde güncellendi.
+                const winColorDay = new THREE.Color(0x4488ff); 
+                const winColorNight = new THREE.Color(0xffcc00);
+                const winEmissiveDay = new THREE.Color(0x000000);
+                const winEmissiveNight = new THREE.Color(0xffaa00);
+                
+                this.windows.forEach(win => {
+                    win.color.lerp(this.isNight ? winColorNight : winColorDay, delta * 2);
+                    win.emissive.lerp(this.isNight ? winEmissiveNight : winEmissiveDay, delta * 2);
+                });
+
+                this.players.forEach(p => p.update(delta, time));
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        const game = new Game();
+    </script>
+</body>
+</html>
