@@ -483,21 +483,68 @@
                 }
 
                 this.flameVisualGroup = new THREE.Group();
-                this.flameCore = new THREE.Mesh(
-                    new THREE.ConeGeometry(0.38, 1.2, 14),
-                    new THREE.MeshStandardMaterial({ color: 0xffa11c, emissive: 0xff6a00, emissiveIntensity: 1.1, transparent: true, opacity: 0.95 })
-                );
-                this.flameCore.position.y = 0.9;
-                this.flameCore.castShadow = true;
+                const flameMatOuter = new THREE.MeshStandardMaterial({
+                    color: 0xffcf6e,
+                    emissive: 0xff7a1a,
+                    emissiveIntensity: 0.95,
+                    transparent: true,
+                    opacity: 0.58,
+                    depthWrite: false
+                });
+                const flameMatMid = new THREE.MeshStandardMaterial({
+                    color: 0xffa338,
+                    emissive: 0xff5c00,
+                    emissiveIntensity: 1.2,
+                    transparent: true,
+                    opacity: 0.82,
+                    depthWrite: false
+                });
+                const flameMatCore = new THREE.MeshStandardMaterial({
+                    color: 0xfff1bf,
+                    emissive: 0xffb347,
+                    emissiveIntensity: 1.35,
+                    transparent: true,
+                    opacity: 0.92,
+                    depthWrite: false
+                });
 
-                this.flameOuter = new THREE.Mesh(
-                    new THREE.ConeGeometry(0.62, 1.6, 14),
-                    new THREE.MeshStandardMaterial({ color: 0xffd36a, emissive: 0xff8a24, emissiveIntensity: 0.9, transparent: true, opacity: 0.65 })
+                this.flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.7, 16), flameMatOuter);
+                this.flameOuter.position.y = 0.84;
+                this.flameOuter.rotation.y = Math.PI / 12;
+
+                this.flameMid = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.45, 16), flameMatMid);
+                this.flameMid.position.y = 0.9;
+                this.flameMid.rotation.y = -Math.PI / 9;
+
+                this.flameCore = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.18, 16), flameMatCore);
+                this.flameCore.position.y = 0.93;
+
+                this.emberBed = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.55, 20, 14),
+                    new THREE.MeshStandardMaterial({
+                        color: 0x4b1e0e,
+                        emissive: 0xff4d00,
+                        emissiveIntensity: 0.72,
+                        roughness: 0.9,
+                        metalness: 0.05
+                    })
                 );
-                this.flameOuter.position.y = 0.85;
-                this.flameOuter.castShadow = true;
-                this.flameOuter.rotation.y = Math.PI / 10;
-                this.flameVisualGroup.add(this.flameOuter, this.flameCore);
+                this.emberBed.scale.set(1.1, 0.35, 1.1);
+                this.emberBed.position.y = 0.42;
+
+                this.fireGlow = new THREE.Sprite(
+                    new THREE.SpriteMaterial({
+                        color: 0xffa347,
+                        transparent: true,
+                        opacity: 0.3,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false
+                    })
+                );
+                this.fireGlow.position.y = 0.95;
+                this.fireGlow.scale.set(2.8, 2.8, 1);
+
+                this.flameVisualGroup.add(this.fireGlow, this.emberBed, this.flameOuter, this.flameMid, this.flameCore);
                 this.fireParticles = new FireParticles();
                 this.flameVisualGroup.add(this.fireParticles.mesh);
                 this.fireGroup.add(this.flameVisualGroup);
@@ -626,11 +673,30 @@
                 const fireIntensity = this.isNight ? (2.1 + Math.sin(time * 7) * 0.35) : (1.15 + Math.sin(time * 6) * 0.18);
                 this.fireLight.intensity = THREE.MathUtils.lerp(this.fireLight.intensity, fireIntensity, delta * 4);
                 this.fireParticles.update(this.isNight ? 1.08 : 1);
-                this.flameVisualGroup.position.y = Math.max(0, Math.sin(time * 9) * 0.03);
-                this.flameCore.scale.setScalar(1 + Math.sin(time * 14) * 0.08);
-                this.flameOuter.scale.set(1 + Math.sin(time * 10) * 0.1, 1 + Math.sin(time * 13) * 0.12, 1 + Math.sin(time * 11) * 0.1);
-                this.flameCore.material.opacity = this.isNight ? 0.98 : 0.86;
-                this.flameOuter.material.opacity = this.isNight ? 0.72 : 0.52;
+                this.flameVisualGroup.position.y = Math.max(0, Math.sin(time * 9) * 0.032);
+                this.flameOuter.rotation.y += delta * 0.6;
+                this.flameMid.rotation.y -= delta * 0.9;
+                this.flameCore.scale.set(
+                    1 + Math.sin(time * 15.5) * 0.08,
+                    1 + Math.sin(time * 18) * 0.16,
+                    1 + Math.sin(time * 14.2) * 0.08
+                );
+                this.flameMid.scale.set(
+                    1 + Math.sin(time * 10.5) * 0.1,
+                    1 + Math.sin(time * 12.5) * 0.14,
+                    1 + Math.sin(time * 11) * 0.1
+                );
+                this.flameOuter.scale.set(
+                    1 + Math.sin(time * 8.2) * 0.12,
+                    1 + Math.sin(time * 9.6) * 0.18,
+                    1 + Math.sin(time * 8.8) * 0.12
+                );
+                this.fireGlow.material.opacity = this.isNight ? 0.45 : 0.24;
+                this.fireGlow.scale.setScalar((this.isNight ? 3.1 : 2.5) + Math.sin(time * 7.4) * 0.22);
+                this.emberBed.material.emissiveIntensity = this.isNight ? 1.05 + Math.sin(time * 12) * 0.15 : 0.62 + Math.sin(time * 10) * 0.08;
+                this.flameCore.material.opacity = this.isNight ? 0.95 : 0.82;
+                this.flameMid.material.opacity = this.isNight ? 0.88 : 0.74;
+                this.flameOuter.material.opacity = this.isNight ? 0.68 : 0.5;
                 this.starsMat.opacity = THREE.MathUtils.lerp(this.starsMat.opacity, this.isNight ? 0.95 : 0, delta * 1.8);
                 this.moon.material.emissiveIntensity = THREE.MathUtils.lerp(this.moon.material.emissiveIntensity, this.isNight ? 0.95 : 0.22, delta * 1.5);
                 this.renderer.toneMappingExposure = THREE.MathUtils.lerp(this.renderer.toneMappingExposure, this.isNight ? 0.72 : 1.02, delta * 1.2);
