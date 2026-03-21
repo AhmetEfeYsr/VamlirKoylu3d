@@ -489,7 +489,8 @@
                     emissiveIntensity: 0.95,
                     transparent: true,
                     opacity: 0.58,
-                    depthWrite: false
+                    depthWrite: false,
+                    depthTest: false
                 });
                 const flameMatMid = new THREE.MeshStandardMaterial({
                     color: 0xffa338,
@@ -497,7 +498,8 @@
                     emissiveIntensity: 1.2,
                     transparent: true,
                     opacity: 0.82,
-                    depthWrite: false
+                    depthWrite: false,
+                    depthTest: false
                 });
                 const flameMatCore = new THREE.MeshStandardMaterial({
                     color: 0xfff1bf,
@@ -505,19 +507,20 @@
                     emissiveIntensity: 1.35,
                     transparent: true,
                     opacity: 0.92,
-                    depthWrite: false
+                    depthWrite: false,
+                    depthTest: false
                 });
 
-                this.flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.7, 16), flameMatOuter);
-                this.flameOuter.position.y = 0.84;
-                this.flameOuter.rotation.y = Math.PI / 12;
+                this.flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.74, 1.78, 16), flameMatOuter);
+                this.flameOuter.position.set(0.03, 0.84, -0.02);
+                this.flameOuter.rotation.y = Math.PI / 10;
 
-                this.flameMid = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.45, 16), flameMatMid);
-                this.flameMid.position.y = 0.9;
-                this.flameMid.rotation.y = -Math.PI / 9;
+                this.flameMid = new THREE.Mesh(new THREE.ConeGeometry(0.54, 1.52, 16), flameMatMid);
+                this.flameMid.position.set(-0.04, 0.91, 0.03);
+                this.flameMid.rotation.y = -Math.PI / 8;
 
                 this.flameCore = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.18, 16), flameMatCore);
-                this.flameCore.position.y = 0.93;
+                this.flameCore.position.set(0.02, 0.95, 0.01);
 
                 this.emberBed = new THREE.Mesh(
                     new THREE.SphereGeometry(0.55, 20, 14),
@@ -547,6 +550,11 @@
                 this.flameVisualGroup.add(this.fireGlow, this.emberBed, this.flameOuter, this.flameMid, this.flameCore);
                 this.fireParticles = new FireParticles();
                 this.flameVisualGroup.add(this.fireParticles.mesh);
+                this.fireGlow.renderOrder = 5;
+                this.flameOuter.renderOrder = 6;
+                this.flameMid.renderOrder = 7;
+                this.flameCore.renderOrder = 8;
+                this.fireParticles.mesh.renderOrder = 9;
                 this.fireGroup.add(this.flameVisualGroup);
                 
                 this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -676,6 +684,12 @@
                 this.flameVisualGroup.position.y = Math.max(0, Math.sin(time * 9) * 0.032);
                 this.flameOuter.rotation.y += delta * 0.6;
                 this.flameMid.rotation.y -= delta * 0.9;
+                this.flameOuter.position.x = Math.sin(time * 2.1) * 0.05 + 0.03;
+                this.flameOuter.position.z = Math.cos(time * 1.9) * 0.04 - 0.02;
+                this.flameMid.position.x = Math.cos(time * 2.6) * 0.04 - 0.04;
+                this.flameMid.position.z = Math.sin(time * 2.3) * 0.03 + 0.03;
+                this.flameCore.position.x = Math.sin(time * 3.3) * 0.025 + 0.02;
+                this.flameCore.position.z = Math.cos(time * 3.1) * 0.025 + 0.01;
                 this.flameCore.scale.set(
                     1 + Math.sin(time * 15.5) * 0.08,
                     1 + Math.sin(time * 18) * 0.16,
